@@ -36,7 +36,6 @@ interface iRestClient {
 	*
 	*/
 	public function __construct( $base_url, $authentication_scheme = 'Basic', $authentication_parameters = array(), $accept_self_signed = false );
-
 	/**
 	* update_connection Change the connection settings for the REST client
 	* @param [string] $base_url                  [Base URL of the REST Server]
@@ -65,7 +64,6 @@ interface iRestClient {
 	*
 	*/
 	public function update_connection( $base_url, $authentication_scheme = 'Basic', $authentication_parameters = array() );
-
 	/**
 	* update_connection Change the connection settings for the REST client
 	* @param string $authentication_scheme     [Type of Authentiation:
@@ -93,55 +91,9 @@ interface iRestClient {
 	*
 	*/
 	public function update_authentication( $authentication_scheme = 'Basic', $authentication_parameters = array() );
-
-	/**
-	 * Set custom headers for REST Call
-	 * @param  array() $headers $key=>$value pairs of header values
-	 * @return void
-	 */
 	public function custom_headers( $headers );
-
-	/**
-	 * Impelments a REST GET HTTP Call
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $params  $key=>$value pairs of query string parameters
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a JSON or XML string.
-	 *                                            // You still need to parse the string after you get it.
-	 */
 	public function rest_get( $path, $params );
-
-	/**
-	 * Impelments a REST PUT HTTP Call
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $body  $key=>$value pairs simlar to that of a POST
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 *
-	 */
 	public function rest_put( $path, $body );
-
-	/**
-	 * Impelments a REST DELETE call
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  string $body (optional) Technically DELETE CAN take a body, so in might.
-	 *                       Same $key=>$value pairs as POST and PUT
-	 * @return array         'code'=>'200', // Response code i.e. 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 */
-	public function rest_delete( $path, $body = null );
-
-	/**
-	 * Impelments a REST POST HTTP Call
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $body  $key=>$value pairs  for POST fields
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 *
-	 */
+	public function rest_delete( $path, $body );
 	public function rest_post( $path, $body );
 }

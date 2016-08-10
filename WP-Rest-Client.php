@@ -11,55 +11,39 @@ class WPRestClient implements iRestClient{
 	protected $authentication_parameters;
 	protected $base_url;
 	protected $accept_self_signed;
+	protected $headers;
+	protected $cache;
 
-	/**
-	* __construct Create a REST client that uses WordPress HTTP calls
-	* @param string $base_url                Base URL to the REST Server
-	* @param string $authentication_scheme     Type of Authentiation:
-	*                                          Basic: Standard HTTP Authentication
-	*                                          Digest: Standard HTTP Digest Authentication
-	*                                          Header: Hader Authentication
-	*                                          Query: Authentication with query string parameters
-	*                                          cert: Autenticate with a certificate file
-	* @param array  $authentication_parameters [Authentication Parameters depend on authentication scheme]
-	* $authentication_scheme='Basic', $authentication_parameters['username'] = username;
-	*                                 $authentication_parameters['password'] = password;
-	*
-	* $authentication_scheme='Digest', $authentication_parameters['digest_header'] = digest header;
-	*                                  $authentication_parameters['digest_parameters']['username']
-	*                                  $authentication_parameters['digest_parameters']['password']
-	*                                  $authentication_parameters['digest_parameters']['url']
-	*
-	* $authentication_scheme='Header'  $authentication_parameters['header_key'] = value;
-	* $authentication_scheme='Query' $authentication_parameters['query_key'] = value
-	*
-	* $autentication_scheme = 'cert' $authentication_parameters['cert_file'] = system path to cert file
-	*                                $authentication_parameters['cert_password'] = password to access cert file
-	*
-	* @param bool $accept_self_signed - Set to true if you want to accept a self-signed certificate
-	*
-	*/
+
 	public function __construct( $base_url, $authentication_scheme = 'Basic', $authentication_parameters = array(), $accept_self_signed = false ) {
+		$this->accept_self_signed = $accept_self_signed;
+		$this->update_connection( $base_url, $authentication_scheme, $authentication_parameters );
+		$this->cache = null;
+		if ( function_exists( 'wp_cache_set' ) ) {
+			require_once( __DIR__ . '/cache-interface/wp-cache-class.php' );
+			$this->cache = new WPCacheImpl( 'aretex-forte-api-cache' );
+		}
+	}
+
+	public function update_connection( $base_url, $authentication_scheme = 'Basic', $authentication_parameters = array() ) {
 		$this->auhtentication_scheme = $authentication_scheme;
 		$this->authentication_parameters = $authentication_parameters;
 		$this->base_url = $base_url;
-		$this->accept_self_signed = $accept_self_signed;
 	}
 
-	/**
-	 * Impelments a REST PUT HTTP Call using wp_remote_request
-	 * * 	Note implements rest_put_args filters to update arguments if plugin or theme requires
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $body  $key=>$value pairs simlar to that of a POST
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 *
-	 */
+	public function update_authentication( $authentication_scheme = 'Basic', $authentication_parameters = array() ) {
+		$this->auhtentication_scheme = $authentication_scheme;
+		$this->authentication_parameters = $authentication_parameters;
+	}
+
+	public function custom_headers( $headers ) {
+		$this->headers = $headers;
+	}
+
 	public function rest_put( $path, $body ) {
 
 		$api_url = rtrim( $this->base_url,'/' ).'/'.ltrim( $path,'/' );
-		$headers = $this->autentication_headers();
+		$headers = $this->autentication_headers( 'PUT' );
 
 		$req_args = array(
 			'method' => 'PUT',
@@ -76,19 +60,9 @@ class WPRestClient implements iRestClient{
 		return $result;
 	}
 
-	/**
-	 * Impelments a REST DELETE call using wp_remote_request
-	 * 	Note implements: rest_delete_args filters to update arguments if plugin or theme requires
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  string $body (optional) Technically DELETE CAN take a body, so in might.
-	 *                       Same $key=>$value pairs as POST and PUT
-	 * @return array         'code'=>'200', // Response code i.e. 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 */
 	public function rest_delete( $path, $body ) {
 		$api_url = $this->authentication_query( rtrim( $this->base_url,'/' ).'/'.ltrim( $path,'/' ) );
-		$headers = $this->autenticationHeaders();
+		$headers = $this->authentication_headers( 'DELETE' );
 
 		$req_args = array(
 			'method' => 'DELETE',
@@ -104,19 +78,9 @@ class WPRestClient implements iRestClient{
 		return $result;
 	}
 
-	/**
-	 * Impelments a REST POST HTTP Call using wp_remote_post
-	 * 	Note implements: rest_post_args filters to update arguments if plugin or theme requires
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $body  $key=>$value pairs  for POST fields
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a confirmation or ID - you will need to parse it
-	 *
-	 */
 	public function rest_post( $path, $body ) {
 		$api_url = $this->authentication_query( rtrim( $this->base_url,'/' ).'/'.ltrim( $path,'/' ) );
-		$headers = $this->autenticationHeaders();
+		$headers = $this->authentication_headers( 'POST' );
 
 		$args = array(
 			'headers' => $headers,
@@ -131,18 +95,15 @@ class WPRestClient implements iRestClient{
 		return $results;
 	}
 
-	/**
-	 * Impelments a REST GET HTTP Call using wp_remote_get
-	 * @param  string $path   path to resource - Should not include the base URL
-	 * @param  array $params  $key=>$value pairs of query string parameters
-	 * @return array         'code'=>'200', // Response code 200 success, 404 not found etc.
-	 *                       'headers'=>array('key'=>'value') // Response headers ad key / value array
-	 *                       'body' => 'content', // Response content. Usually a JSON or XML string.
-	 *                                            // You still need to parse the string after you get it.
-	 */
 	public  function rest_get( $path, $params ) {
+
 		$api_url = rtrim( $this->base_url,'/' ).'/'.ltrim( $path,'/' );
-		$headers = $this->autenticationHeaders();
+		$cache_key = md5( $api_url . serialize( $params ) );
+		$cached_value = $this->cache->get( $cache_key );
+		if ( $cached_value ) {
+			return $cached_value;
+		}
+		$headers = $this->authentication_headers( 'GET' );
 
 		$args = array(
 			'headers' => $headers,
@@ -158,14 +119,13 @@ class WPRestClient implements iRestClient{
 
 		$results = wp_remote_get( $api_url,$args );
 
+		if ( is_object( $this->cache ) && method_exists( $this->cache, 'set' ) ) {
+			$this->cache->set( $cache_key, $results, 300 );
+		}
+
 		return $results;
 	}
 
-/**
- * Builds query based authentication string
- * @param  string $url FULL url being queried
- * @return $url with query string parameters
- */
 	protected function authentication_query( $url ) {
 		if ( is_array( $this->authentication_parameters ) && 'query' === strtolower( $this->authentication_scheme ) ) {
 			$query_string = http_build_query( $this->authentication_parameters );
@@ -178,12 +138,7 @@ class WPRestClient implements iRestClient{
 		return $url;
 	}
 
-/**
- * Builds authenticatino headers
- * @param  string $method GET,PUT, POST or DELETE
- * @return array  http request headers as key=>value pair
- */
-	protected function autentication_headers( $method ) {
+	protected function authentication_headers( $method ) {
 		$headers = array();
 		switch ( strtolower( $this->auhtentication_scheme ) ) {
 			case 'basic':
@@ -199,17 +154,16 @@ class WPRestClient implements iRestClient{
 			break;
 		}
 
+		if ( is_array( $this->headers ) ) {
+			$headers = array_merge( $headers, $this->headers );
+		}
+
 		return $headers;
 	}
 
 	// Credit: https://gist.github.com/funkatron/949952
 	// Credit: https://www.sitepoint.com/understanding-http-digest-access-authentication/
 	// See also: https://tools.ietf.org/html/rfc2617#page-6
-	/**
-	 * Handles digest authentication
-	 * @param  string $method GET, PUT, POST or DELETE
-	 * @return array $headers Digest authentication headers
-	 */
 	protected function digest_authenticate( $method ) {
 		// If already pre-built:
 		if ( isset( $this->authentication_parameters['digest_header'] ) ) {
